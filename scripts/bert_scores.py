@@ -11,18 +11,52 @@ if __name__ == "__main__":
 
     sentences = [
         '日本語は面白いです。',
+        '二本語は面白いです。',
         '日本語は硬いです。',
         'せのもんはなんですか。',
         '専門はないです。',
         'せんもんはないです。'
     ]
+    
+    print('cl-tohoku/bert-base-japanese')
+    for text in sentences:
+        score = scorer.score_sentence(text)
+        print(score, text)
+    print("-" * 80)
 
+    model, tokenizer = get_pretrained('cl-tohoku/bert-base-japanese-char', device='cpu')
+    scorer = MLMScorer(model, tokenizer, device='cpu')
+    print('cl-tohoku/bert-base-japanese-char')
+    for text in sentences:
+        score = scorer.score_sentence(text)
+        print(score, text)
+    print("-" * 80)
+
+
+    model, tokenizer = get_pretrained('bert-base-cased', device='cpu')
+    scorer = MLMScorer(model, tokenizer, device='cpu')
+    print('bert-base-cased')
+    sentences = [
+        "Hello world!", 
+        "I is a student", 
+        "I am a student"
+    ]
+    
     for text in sentences:
         score = scorer.score_sentence(text)
         print(score, text)
 
-    model, tokenizer = get_pretrained('bert-base-cased', device='cpu')
+    print("-" * 80)
+
+    model, tokenizer = get_pretrained('NlpHUST/vibert4news-base-cased', device='cpu')
     scorer = MLMScorer(model, tokenizer, device='cpu')
-    for text in ["Hello world!", "I is a student", "I am a student"]:
+    print('NlpHUST/vibert4news-base-cased')
+    sentences = [
+        'Tôi là sinh viên đại học.',
+        'Tôi là học sinh đại học',
+        'Tôi là sinh viê đại học.',
+        'Tôi la sinh vien đại học',
+    ]
+    for text in sentences:
         score = scorer.score_sentence(text)
         print(score, text)

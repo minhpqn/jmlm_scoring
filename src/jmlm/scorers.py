@@ -5,6 +5,7 @@ from typing import List
 
 import numpy as np
 import torch
+from parso.python.tokenize import tokenize
 from torch.nn.functional import softmax
 
 
@@ -86,52 +87,51 @@ class MLMScorer():
         self.model.to(device)
         self.device = device
 
-    def score_sentences(self, sentences: List[str]):
-        return 0.0
+    def score_sentences(self, sentences: List[str], per_token=False):
+        return [self.score_sentence(text, per_token=per_token) for text in sentences]
 
-    def score_sentence(self, text: str):
+    def score_sentence(self, text: str, per_token=False):
         tokenized_text = self.tokenizer.tokenize(text)
-        text_length = len(tokenized_text)
-        input_ids = self.tokenizer.encode(text)
-        # print(input_ids)
-        masked_input_ids = []
-        masked_indexes = []
-        for i in range(1, len(input_ids)-1):
-            masked_token_ids = input_ids.copy()
-            masked_token_ids[i] = self.tokenizer.mask_token_id
-            masked_input_ids.append(masked_token_ids)
-            masked_indexes.append(i)
-        
-        # print(masked_input_ids)
-        # encoded_inputs = self.tokenizer.batch_encode_plus(masked_input_ids)
-        # print(encoded_inputs)
 
-        masked_input_ids = torch.LongTensor(masked_input_ids)
+        masked_tokenized_texts = []
+        masked_indexes = []
+        input_ids = []
+        attention_mask = []
+        token_type_ids = []
+        for i in range(len(tokenized_text)):
+            masked_text = tokenized_text.copy()
+            masked_text[i] = '[MASK]'
+            masked_indexes.append(i)
+            masked_input_ids = self.tokenizer.encode(masked_text)
+            input_ids.append(masked_input_ids)
+            attention_mask.append([1] * len(masked_input_ids))
+            token_type_ids.append([0] * len(masked_input_ids))
+
+        input_ids = torch.tensor(input_ids, device=self.device)
+        attention_mask = torch.tensor(attention_mask, device=self.device)
+        token_type_ids = torch.tensor(token_type_ids, device=self.device)
+
+        inputs = {
+            'input_ids': input_ids,
+            'attention_mask': attention_mask,
+            'token_type_ids': token_type_ids,
+        }
 
         with torch.no_grad():
-            outputs = self.model(masked_input_ids)
+            outputs = self.model(**inputs)
             logits = outputs.logits
-            # print(logits)
-        logits = softmax(logits, dim=1)
+        
         token_scores = []
         log_prob_score = 0.0
         for i, mask_index in enumerate(masked_indexes):
-            probs = logits[i]
-            # probs = softmax(probs, dim=0)
-            masked_token_id = input_ids[mask_index]
-            print(mask_index, masked_token_id, self.tokenizer.convert_ids_to_tokens([masked_token_id])[0])
-            log_prob = np.log(probs[mask_index, masked_token_id])
-            print(probs[mask_index, masked_token_id], log_prob)
+            predictions = logits[i].squeeze(0)
+            probs = softmax(predictions, dim=1)
+            masked_token_id = self.tokenizer.convert_tokens_to_ids([tokenized_text[mask_index]])[0]
+            log_prob = np.log(probs[mask_index+1, masked_token_id]).cpu().numpy().item()
             token_scores.append(log_prob)
             log_prob_score += log_prob
-            # print(probs.shape)
 
-            #             with torch.no_grad():
-            #     predictions = model(tokens_tensor)
-
-            # predicted_index = torch.argmax(predictions[0, masked_index]).item()
-            # predicted_token = tokenizer.convert_ids_to_tokens([predicted_index])[0]
-            # print(predicted_token)
-
-        print(token_scores)
-        return log_prob_score
+        if per_token:
+            return token_scores
+        else:
+            return log_prob_score

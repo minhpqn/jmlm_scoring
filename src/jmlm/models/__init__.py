@@ -1,19 +1,24 @@
 """Get pre-trained models
 """
 from transformers import (AutoModelForCausalLM, AutoTokenizer, BertForMaskedLM,
-                          BertJapaneseTokenizer, BertTokenizer, T5Tokenizer)
+                          BertJapaneseTokenizer, BertTokenizer, T5Tokenizer,
+                          logging)
+
+logging.set_verbosity_error()
 
 TOKENIZER_CLASSES = {
     'gpt2': AutoTokenizer,
     'rinna/japanese-gpt2-medium': T5Tokenizer,
     'cl-tohoku/bert-base-japanese': BertJapaneseTokenizer,
     'bert-base-cased': BertTokenizer,
+    'NlpHUST/vibert4news-base-cased': BertTokenizer,
 }
 
 MODEL_CLASSSES = {
     'gpt2': AutoModelForCausalLM,
     'cl-tohoku/bert-base-japanese': BertForMaskedLM,
-    'bert-base-cased': BertForMaskedLM
+    'bert-base-cased': BertForMaskedLM,
+    'NlpHUST/vibert4news-base-cased': BertForMaskedLM,
 }
 
 def get_pretrained(model_name_or_path, device='cpu'):

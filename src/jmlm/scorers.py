@@ -6,6 +6,7 @@ from typing import List
 import numpy as np
 import torch
 from parso.python.tokenize import tokenize
+from torch.functional import norm
 from torch.nn.functional import softmax
 
 
@@ -20,7 +21,7 @@ class LMScorer():
 
         self._model.to(self._device)
     
-    def score_sentences(self, lines: List[str], per_token: bool=False):
+    def score_sentences(self, lines: List[str], normalize: bool=False, per_token: bool=False):
         lines = [self._tokenizer.bos_token + line + self._tokenizer.eos_token for line in lines]
 
         tok_res = self._tokenizer.batch_encode_plus(lines, return_tensors='pt', add_special_tokens=False, 
@@ -28,6 +29,7 @@ class LMScorer():
         input_ids = tok_res['input_ids'].to(self._device)
         attention_mask = tok_res['attention_mask'].to(self._device)
         lines_len = torch.sum(tok_res['attention_mask'], dim=1)
+        lines_len = lines_len.cpu().numpy()
 
         with torch.no_grad():
             outputs = self._model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
@@ -41,9 +43,13 @@ class LMScorer():
             for token_ind in range(0, lines_len[line_ind]-2):
                 token_prob = softmax(logits[line_ind, token_ind], dim=0)
                 token_id = input_ids[line_ind, token_ind + 1]
-                token_score = torch.log(token_prob[token_id]).cpu().numpy().item()
+                token_score = torch.log(token_prob[token_id])
+                token_score = token_score.cpu().numpy()
                 token_scores.append(token_score)
                 line_log_prob += token_score
+            
+            if normalize:
+                line_log_prob = line_log_prob / (lines_len[line_ind]-2)
             log_probs.append(line_log_prob)
             list_token_scores.append(token_scores)
 
@@ -52,7 +58,7 @@ class LMScorer():
         else:
             return log_probs
 
-    def score_sentence(self, text: str, per_token: bool=False):
+    def score_sentence(self, text: str, normalize: bool=False, per_token: bool=False):
         """Slow version of scoring a sentence
         """
         tokenize_input = self._tokenizer.tokenize(text)
@@ -73,6 +79,9 @@ class LMScorer():
             token_scores.append(score.item())
             log_prob += score
 
+        if normalize:
+            log_prob /= len(tokenize_input)
+
         if per_token:
             return token_scores
         else:
@@ -87,13 +96,12 @@ class MLMScorer():
         self.model.to(device)
         self.device = device
 
-    def score_sentences(self, sentences: List[str], per_token=False):
-        return [self.score_sentence(text, per_token=per_token) for text in sentences]
+    def score_sentences(self, sentences: List[str], normalize=False, per_token=False):
+        return [self.score_sentence(text, normalize=normalize, per_token=per_token) for text in sentences]
 
-    def score_sentence(self, text: str, per_token=False):
+    def score_sentence(self, text: str, normalize=False, per_token=False):
         tokenized_text = self.tokenizer.tokenize(text)
 
-        masked_tokenized_texts = []
         masked_indexes = []
         input_ids = []
         attention_mask = []
@@ -127,10 +135,12 @@ class MLMScorer():
             predictions = logits[i].squeeze(0)
             probs = softmax(predictions, dim=1)
             masked_token_id = self.tokenizer.convert_tokens_to_ids([tokenized_text[mask_index]])[0]
-            log_prob = np.log(probs[mask_index+1, masked_token_id]).cpu().numpy().item()
+            log_prob = np.log(probs[mask_index+1, masked_token_id].cpu().numpy()).item()
             token_scores.append(log_prob)
             log_prob_score += log_prob
 
+        if normalize:
+            log_prob_score /= len(tokenized_text)
         if per_token:
             return token_scores
         else:

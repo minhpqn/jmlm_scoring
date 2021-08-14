@@ -33,7 +33,7 @@ def get_pretrained(model_name_or_path, device='cpu'):
         model_class = AutoModelForCausalLM
 
     tokenizer = tokenizer_class.from_pretrained(model_name_or_path)
-    if model_name_or_path == 'gpt2':
+    if model_name_or_path.find('gpt2') != -1 or model_name_or_path.find('gpt-neo') != -1 or model_name_or_path.find('gpt3') != -1:
         tokenizer.pad_token = tokenizer.eos_token
     model = model_class.from_pretrained(model_name_or_path)
     model = model.to(device)

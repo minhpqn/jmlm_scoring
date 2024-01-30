@@ -11,7 +11,7 @@ setup(
     package_dir={'': 'src'},
 
     install_requires=[
-        'transformers==4.16.2',
+        'transformers==4.30.0',
         'unidic_lite',
         'fugashi',
         'ipadic'
